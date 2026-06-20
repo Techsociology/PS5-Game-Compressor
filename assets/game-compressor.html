@@ -7304,9 +7304,6 @@
     }
 
     function safeSpaceText(g) {
-      if (state.compressSourcePolicy === 'keep') {
-        return 'Original remains untouched';
-      }
       if (state.compressDestination === 'usb') {
         const usb = selectedCompressUsb();
         if (usb) return 'Requires target free space; deletes after verification';
