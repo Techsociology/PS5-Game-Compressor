@@ -1,13 +1,10 @@
 name: Pre-release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*-*'   # e.g. v1.1.0-rc1, v1.1.0-beta.2
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Pre-release tag to create/update (e.g. v1.1.0-rc1)'
+        description: 'Pre-release tag to create (e.g. v1.1.0-rc1)'
         required: true
 
 permissions:
@@ -28,20 +25,11 @@ jobs:
         with:
           name: ${{ needs.build.outputs.artifact-name }}
 
-      - name: Determine tag name
-        id: tagname
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Create GitHub Pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tagname.outputs.tag }}
-          name: ${{ steps.tagname.outputs.tag }}
+          tag_name: ${{ inputs.tag_name }}
+          name: ${{ inputs.tag_name }}
           prerelease: true
           generate_release_notes: true
           files: |
