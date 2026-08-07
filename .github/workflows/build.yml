@@ -15,65 +15,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            bash \
-            build-essential \
-            clang-18 \
-            lld-18 \
-            llvm-18 \
-            wget \
-            unzip \
-            python3 \
-            python3-pyelftools \
-            pkg-config \
-            cmake \
-            meson \
-            socat
-
-      - name: Cache PS5 Payload SDK + cross-compiled zlib
-        id: sdk-cache
-        uses: actions/cache@v4
-        with:
-          path: /opt/ps5-payload-sdk
-          key: ps5-payload-sdk-zlib-${{ runner.os }}-v1
-
-      - name: Download PS5 Payload SDK
-        if: steps.sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          wget -q https://github.com/ps5-payload-dev/sdk/releases/latest/download/ps5-payload-sdk.zip
-          sudo unzip -q ps5-payload-sdk.zip -d /opt
-
-      - name: Cross-compile zlib for the PS5 target
-        if: steps.sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth 1 https://github.com/madler/zlib.git
-          cd zlib
-          CC=/opt/ps5-payload-sdk/bin/prospero-clang \
-          AR=/opt/ps5-payload-sdk/bin/prospero-ar \
-          RANLIB=/opt/ps5-payload-sdk/bin/prospero-ranlib \
-          ./configure --static
-          make -j"$(nproc)"
-          sudo mkdir -p /opt/ps5-payload-sdk/include
-          sudo mkdir -p /opt/ps5-payload-sdk/lib
-          sudo cp zlib.h zconf.h /opt/ps5-payload-sdk/include/
-          sudo cp libz.a /opt/ps5-payload-sdk/lib/
-
-      - name: Build
-        env:
-          PS5_PAYLOAD_SDK: /opt/ps5-payload-sdk
-        run: make
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: game-compressor-elf
-          path: game-compressor.elf
-          if-no-files-found: error
+    uses: ./.github/workflows/_build.yml
+    with:
+      # Builds against the latest ps5-payload-sdk release by default,
+      # resolved to a real tag at build time (see _build.yml). Set a
+      # PS5_SDK_VERSION repository variable (Settings > Secrets and
+      # variables > Actions > Variables) if you ever want to pin to a
+      # specific tag instead, across all three workflows from one place.
+      sdk_version: ${{ vars.PS5_SDK_VERSION || 'latest' }}

@@ -10,66 +10,18 @@ permissions:
 
 jobs:
   build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      sdk_version: ${{ vars.PS5_SDK_VERSION || 'latest' }}
+
+  release:
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            bash \
-            build-essential \
-            clang-18 \
-            lld-18 \
-            llvm-18 \
-            wget \
-            unzip \
-            python3 \
-            python3-pyelftools \
-            pkg-config \
-            cmake \
-            meson \
-            socat
-
-      - name: Cache PS5 Payload SDK + cross-compiled zlib
-        id: sdk-cache
-        uses: actions/cache@v4
-        with:
-          path: /opt/ps5-payload-sdk
-          key: ps5-payload-sdk-zlib-${{ runner.os }}-v1
-
-      - name: Download PS5 Payload SDK
-        if: steps.sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          wget -q https://github.com/ps5-payload-dev/sdk/releases/latest/download/ps5-payload-sdk.zip
-          sudo unzip -q ps5-payload-sdk.zip -d /opt
-
-      - name: Cross-compile zlib for the PS5 target
-        if: steps.sdk-cache.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth 1 https://github.com/madler/zlib.git
-          cd zlib
-          CC=/opt/ps5-payload-sdk/bin/prospero-clang \
-          AR=/opt/ps5-payload-sdk/bin/prospero-ar \
-          RANLIB=/opt/ps5-payload-sdk/bin/prospero-ranlib \
-          ./configure --static
-          make -j"$(nproc)"
-          sudo mkdir -p /opt/ps5-payload-sdk/include
-          sudo mkdir -p /opt/ps5-payload-sdk/lib
-          sudo cp zlib.h zconf.h /opt/ps5-payload-sdk/include/
-          sudo cp libz.a /opt/ps5-payload-sdk/lib/
-
-      - name: Build
-        env:
-          PS5_PAYLOAD_SDK: /opt/ps5-payload-sdk
-        run: make
-
-      - name: Compute checksum
-        run: sha256sum game-compressor.elf | awk '{print $1}' > game-compressor.elf.sha256
+          name: ${{ needs.build.outputs.artifact-name }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

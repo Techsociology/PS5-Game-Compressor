@@ -87,11 +87,23 @@ Override either variable if your zlib lives somewhere else.
 
 ### CI
 
+- **`_build.yml`** is a reusable workflow holding the actual build logic
+  (deps, downloading the SDK, cross-compiling zlib, `make`). The other
+  three call it instead of duplicating it.
 - **`build.yml`** builds on every push/PR to `main`.
 - **`release.yml`** builds and publishes a GitHub Release (with the ELF and
   its sha256 checksum attached) when a tag like `v1.1.0` is pushed.
 - **`prerelease.yml`** does the same but marks the release as a pre-release,
   triggered by tags like `v1.1.0-rc1` or manual dispatch.
+
+CI builds against the **latest** `ps5-payload-sdk` release by default. The
+`latest` alias is resolved to a real tag at the start of the build (logged
+in the job summary), and that resolved tag — not the literal word
+`latest` — is what the build cache is keyed on, so a new SDK release
+naturally invalidates the old cache instead of silently reusing a stale
+build. If you ever want to pin to a specific SDK version instead, set a
+`PS5_SDK_VERSION` repository variable (Settings → Secrets and variables →
+Actions → Variables) — all three workflows read it.
 
 Release notes are auto-generated from commits/PRs on each tagged release —
 check the [Releases](../../releases) page for version history.
