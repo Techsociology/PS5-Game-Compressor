@@ -90,11 +90,13 @@ Override either variable if your zlib lives somewhere else.
 - **`_build.yml`** is a reusable workflow holding the actual build logic
   (deps, downloading the SDK, cross-compiling zlib, `make`). The other
   three call it instead of duplicating it.
-- **`build.yml`** builds on every push/PR to `main`.
-- **`release.yml`** builds and publishes a GitHub Release (with the ELF and
-  its sha256 checksum attached) when a tag like `v1.1.0` is pushed.
-- **`prerelease.yml`** does the same but marks the release as a pre-release,
-  triggered by tags like `v1.1.0-rc1` or manual dispatch.
+- **`build.yml`** builds automatically on every push/PR to `main`.
+- **`release.yml`** is triggered manually (Actions tab → Release → Run
+  workflow, or `gh workflow run release.yml -f tag_name=v1.1.0`). It builds,
+  creates the `v1.1.0`-style tag, and publishes a GitHub Release with the
+  ELF and its sha256 checksum attached.
+- **`prerelease.yml`** works the same way but is triggered separately and
+  marks the release as a pre-release — use a tag like `v1.1.0-rc1`.
 
 CI builds against the **latest** `ps5-payload-sdk` release by default. The
 `latest` alias is resolved to a real tag at the start of the build (logged
