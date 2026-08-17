@@ -9341,7 +9341,7 @@ ampr_upload_request(const http_request_t *req) {
   if(n < 0 || (size_t)n >= sizeof(tmp)) {
     return serve_error(req, 500, "AMPR temp path too long");
   }
-  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0777);
   if(fd < 0) return serve_error(req, 500, "open AMPR cache failed");
   if(write_all_fd(fd, req->body, req->body_size) != 0 ||
      fsync(fd) != 0) {
@@ -9426,7 +9426,7 @@ copy_file_contents(const char *src, const char *dst, char *err, size_t err_size)
     snprintf(err, err_size, "open source: %s", strerror(errno));
     return -1;
   }
-  int out = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  int out = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0777);
   if(out < 0) {
     snprintf(err, err_size, "open target: %s", strerror(errno));
     close(in);
