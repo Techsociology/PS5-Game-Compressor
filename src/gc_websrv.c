@@ -20,6 +20,7 @@
 #include "asset.h"
 #include "gc_app_installer.h"
 #include "gc_api.h"
+#include "gc_diag.h"
 #include "gc_json_escape.h"
 #include "websrv.h"
 
@@ -482,7 +483,10 @@ client_thread(void *arg) {
 int
 websrv_listen(unsigned short port, websrv_ready_cb_t ready_cb, void *ready_arg) {
   int srvfd = socket(AF_INET, SOCK_STREAM, 0);
-  if(srvfd < 0) return -1;
+  if(srvfd < 0) {
+    gc_log("websrv socket failed errno=%d", errno);
+    return -1;
+  }
 
   int yes = 1;
   setsockopt(srvfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
@@ -493,13 +497,16 @@ websrv_listen(unsigned short port, websrv_ready_cb_t ready_cb, void *ready_arg) 
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
   if(bind(srvfd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+    gc_log("websrv bind port=%u failed errno=%d", (unsigned)port, errno);
     close(srvfd);
     return -1;
   }
   if(listen(srvfd, 64) != 0) {
+    gc_log("websrv listen port=%u failed errno=%d", (unsigned)port, errno);
     close(srvfd);
     return -1;
   }
+  gc_log("websrv listening port=%u", (unsigned)port);
 
   pthread_mutex_lock(&g_websrv_lock);
   g_websrv_srvfd = srvfd;
@@ -529,6 +536,7 @@ websrv_listen(unsigned short port, websrv_ready_cb_t ready_cb, void *ready_arg) 
     int rc = pthread_create(&t, &at, client_thread, (void *)(intptr_t)fd);
     pthread_attr_destroy(&at);
     if(rc != 0) {
+      gc_log("websrv client pthread_create failed rc=%d", rc);
       close(fd);
     }
   }

@@ -40,6 +40,9 @@
   "/data/pldmgr/payloads/ShadowMountPlus"
 #define SHADOWMOUNT_PAYLOAD_MANAGER_DIR_LEGACY \
   "/data/pldmgr/payloads/shadowmountplus"
+#define SHADOWMOUNT_AUTOLOADER_ELF \
+  "/data/ps5_autoloader/shadowmountplus.elf"
+#define SHADOWMOUNT_AUTOLOADER_DIR "/data/ps5_autoloader"
 #define PAYLOAD_MANAGER_PORT 8084
 #define LOCAL_HTTP_TIMEOUT_SECONDS 5
 #define SHADOWMOUNT_PFSC_SECTOR 65536U
@@ -1179,11 +1182,15 @@ name_contains_shadowmount(const char *name) {
 }
 
 static int
-find_shadowmount_payload_manager_elf(char *path, size_t path_size,
-                                     char *detail, size_t detail_size) {
-  const char *dirs[] = {
-      SHADOWMOUNT_PAYLOAD_MANAGER_DIR,
-      SHADOWMOUNT_PAYLOAD_MANAGER_DIR_LEGACY,
+find_shadowmount_fallback_elf(char *path, size_t path_size,
+                              char *detail, size_t detail_size) {
+  const struct {
+    const char *path;
+    int allow_first_valid;
+  } dirs[] = {
+      { SHADOWMOUNT_PAYLOAD_MANAGER_DIR, 1 },
+      { SHADOWMOUNT_PAYLOAD_MANAGER_DIR_LEGACY, 1 },
+      { SHADOWMOUNT_AUTOLOADER_DIR, 0 },
   };
   char first_valid[PATH_MAX];
   char candidate[PATH_MAX];
@@ -1193,11 +1200,12 @@ find_shadowmount_payload_manager_elf(char *path, size_t path_size,
   if(path && path_size) path[0] = 0;
   if(detail && detail_size) detail[0] = 0;
   for(i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
-    DIR *d = opendir(dirs[i]);
+    DIR *d = opendir(dirs[i].path);
     struct dirent *ent;
     if(!d) {
       if(detail && detail_size && !detail[0]) {
-        snprintf(detail, detail_size, "open %s: %s", dirs[i], strerror(errno));
+        snprintf(detail, detail_size, "open %s: %s", dirs[i].path,
+                 strerror(errno));
       }
       continue;
     }
@@ -1205,7 +1213,7 @@ find_shadowmount_payload_manager_elf(char *path, size_t path_size,
       if(ent->d_name[0] == '.' || !ends_with_ci_local(ent->d_name, ".elf")) {
         continue;
       }
-      if(snprintf(candidate, sizeof(candidate), "%s/%s", dirs[i],
+      if(snprintf(candidate, sizeof(candidate), "%s/%s", dirs[i].path,
                   ent->d_name) >= (int)sizeof(candidate)) {
         continue;
       }
@@ -1218,7 +1226,7 @@ find_shadowmount_payload_manager_elf(char *path, size_t path_size,
         }
         continue;
       }
-      if(!first_valid[0]) {
+      if(dirs[i].allow_first_valid && !first_valid[0]) {
         snprintf(first_valid, sizeof(first_valid), "%s", candidate);
       }
       if(name_contains_shadowmount(ent->d_name)) {
@@ -1334,6 +1342,7 @@ gc_shadowmount_restart_running(char *detail, size_t detail_size) {
   const char *fallbacks[] = {
       SHADOWMOUNT_PAYLOAD_MANAGER_ELF,
       SHADOWMOUNT_PAYLOAD_MANAGER_ELF_LEGACY,
+      SHADOWMOUNT_AUTOLOADER_ELF,
   };
   size_t i;
   int rc;
@@ -1351,8 +1360,8 @@ gc_shadowmount_restart_running(char *detail, size_t detail_size) {
       }
     }
     if(!path[0] &&
-       find_shadowmount_payload_manager_elf(path, sizeof(path), path_detail,
-                                            sizeof(path_detail)) != 0) {
+       find_shadowmount_fallback_elf(path, sizeof(path), path_detail,
+                                     sizeof(path_detail)) != 0) {
       if(detail && detail_size) {
         snprintf(detail, detail_size, "%s; fallback unavailable: %s",
                  original_detail,

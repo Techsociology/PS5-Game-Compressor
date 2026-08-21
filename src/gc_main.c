@@ -8,11 +8,14 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/sysctl.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -33,6 +36,8 @@
 #define LOCAL_HTTP_TIMEOUT_SECONDS 1
 #define HANDOFF_WAIT_SECONDS 8
 #define GAME_COMPRESSOR_PAYLOAD_NAME "game-compressor.elf"
+#define KINFO_PID_OFFSET 72
+#define KINFO_TDNAME_OFFSET 447
 
 typedef enum handoff_result {
   HANDOFF_CONTINUE = 0,
@@ -142,9 +147,16 @@ local_http_get(unsigned short port, const char *path,
   }
   close(fd);
   if(rc != 0) return -1;
+  if(used == 0) return -1;
   response[used] = 0;
   char *p = strstr(response, "\r\n\r\n");
-  p = p ? p + 4 : response;
+  if(strncmp(response, "HTTP/1.1 ", 9) && strncmp(response, "HTTP/1.0 ", 9)) {
+    return -1;
+  }
+  int status = atoi(response + 9);
+  if(status < 200 || status >= 300) return -1;
+  if(!p) return -1;
+  p += 4;
   if(body && body_size) {
     snprintf(body, body_size, "%s", p);
   }
@@ -166,6 +178,79 @@ wait_for_old_server_down(unsigned short port) {
     sleep(1);
   }
   return local_port_open(port) ? -1 : 0;
+}
+
+static int
+signal_stale_game_compressor_process(int signal_no) {
+  int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PROC, 0 };
+  size_t buf_size = 0;
+  uint8_t *buf;
+  uint8_t *ptr;
+  uint8_t *end;
+  pid_t self = getpid();
+  int signaled = 0;
+
+  if(sysctl(mib, 4, NULL, &buf_size, NULL, 0) != 0 || buf_size == 0) {
+    gc_log("stale handoff process enumerate failed errno=%d", errno);
+    return -1;
+  }
+
+  buf = malloc(buf_size);
+  if(!buf) {
+    gc_log("stale handoff process buffer allocation failed size=%lu",
+           (unsigned long)buf_size);
+    return -1;
+  }
+
+  if(sysctl(mib, 4, buf, &buf_size, NULL, 0) != 0) {
+    gc_log("stale handoff process list failed errno=%d", errno);
+    free(buf);
+    return -1;
+  }
+
+  ptr = buf;
+  end = buf + buf_size;
+  while(ptr < end) {
+    int struct_size = *(int *)ptr;
+    pid_t pid;
+    const char *raw_name;
+    char name[64];
+
+    if(struct_size <= 0 || ptr + struct_size > end) break;
+    if((size_t)struct_size <= KINFO_TDNAME_OFFSET) break;
+
+    pid = *(pid_t *)&ptr[KINFO_PID_OFFSET];
+    raw_name = (const char *)&ptr[KINFO_TDNAME_OFFSET];
+    snprintf(name, sizeof(name), "%.*s", (int)sizeof(name) - 1, raw_name);
+    ptr += struct_size;
+
+    if(pid <= 0 || pid == self) continue;
+    if(strcmp(name, GAME_COMPRESSOR_PAYLOAD_NAME) != 0) continue;
+
+    if(kill(pid, signal_no) == 0) {
+      signaled++;
+      gc_log("stale handoff signaled pid=%ld name=%s signal=%d",
+             (long)pid, name, signal_no);
+    } else {
+      gc_log("stale handoff signal failed pid=%ld name=%s signal=%d errno=%d",
+             (long)pid, name, signal_no, errno);
+    }
+  }
+
+  free(buf);
+  return signaled;
+}
+
+static int
+recover_stale_instance(unsigned short port) {
+  int signaled = signal_stale_game_compressor_process(SIGTERM);
+  if(signaled > 0 && wait_for_old_server_down(port) == 0) return 0;
+
+  signaled = signal_stale_game_compressor_process(SIGKILL);
+  if(signaled > 0 && wait_for_old_server_down(port) == 0) return 0;
+
+  gc_log("stale handoff recovery failed signaled=%d", signaled);
+  return -1;
 }
 
 static const char *
@@ -290,6 +375,13 @@ handoff_existing_instance(unsigned short port) {
              resumable ? "active work can resume automatically" :
              "active work is not resumable");
   } else if(local_http_get(port, "/api/status", body, sizeof(body)) != 0) {
+    if(local_port_open(port)) {
+      gc_log("handoff found port %u open but HTTP did not answer cleanly",
+             (unsigned)port);
+      if(recover_stale_instance(port) == 0) {
+        gc_log("handoff recovered stale previous instance");
+      }
+    }
     return HANDOFF_CONTINUE;
   }
 
