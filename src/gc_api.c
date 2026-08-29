@@ -3961,6 +3961,13 @@ find_game_for_operation_source_path(const gc_operation_t *op, gc_game_t *out,
       }
     }
   }
+    if(!candidate.ampr_present &&
+     candidate.source_kind == GC_SOURCE_FOLDER &&
+     ampr_folder_target_probe(candidate.source_path, candidate.ampr_path,
+                              sizeof(candidate.ampr_path),
+                              candidate.ampr_sha256)) {
+    candidate.ampr_present = 1;
+  }
   candidate.can_stream_delete =
       candidate.source_kind == GC_SOURCE_FOLDER ||
       candidate.source_kind == GC_SOURCE_COMPRESSED;
