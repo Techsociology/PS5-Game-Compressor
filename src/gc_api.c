@@ -2973,11 +2973,33 @@ system_ex_title_bound_to(const char *title_id,
 
   if(stat(eboot, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
   if(!statfs_ok) return 0;
-  if(strcmp(fs.f_fstypename, "nullfs") != 0) return 0;
-  if(expected_mount_source && expected_mount_source[0] &&
-     !paths_equal_ignoring_trailing_slash(fs.f_mntfromname,
-                                          expected_mount_source)) {
+  /*changes for SM+ 1.7*/
+  if(strcmp(fs.f_fstypename, "nullfs") != 0 &&
+     strcmp(fs.f_fstypename, "unionfs") != 0) {
     return 0;
+  }
+  if(expected_mount_source && expected_mount_source[0]) {
+    if(strcmp(fs.f_fstypename, "nullfs") == 0) {
+      if(!paths_equal_ignoring_trailing_slash(fs.f_mntfromname,
+                                              expected_mount_source)) {
+        return 0;
+      }
+    } else {
+      /* unionfs overlay: find the underlying nullfs layer in the mount table */
+      struct statfs *mntbuf = NULL;
+      int mntcount = getmntinfo(&mntbuf, MNT_NOWAIT);
+      int found = 0;
+      for(int i = 0; i < mntcount && !found; i++) {
+        if(strcmp(mntbuf[i].f_fstypename, "nullfs") != 0) continue;
+        if(!paths_equal_ignoring_trailing_slash(mntbuf[i].f_mntonname,
+                                                mountpoint)) continue;
+        if(paths_equal_ignoring_trailing_slash(mntbuf[i].f_mntfromname,
+                                               expected_mount_source)) {
+          found = 1;
+        }
+      }
+      if(!found) return 0;
+    }
   }
   return 1;
 }
@@ -8839,6 +8861,19 @@ read_speed_mount_root(const gc_game_t *game, char *out, size_t out_size,
   if(stat(game->mount_path, &st) == 0 && S_ISDIR(st.st_mode)) {
     snprintf(out, out_size, "%s", game->mount_path);
     return 0;
+  }
+  /*SM+ 1.7 fallback*/
+  {
+    char param[1024];
+    snprintf(param, sizeof(param), "%s/%s/sce_sys/param.json",
+             GC_SYSTEM_APP_BASE, game->title_id);
+    if(stat(param, &st) == 0 && S_ISREG(st.st_mode) &&
+       stat(system_root, &st) == 0 && S_ISDIR(st.st_mode)) {
+      gc_log("read-speed using system_ex fallback for title=%s "
+             "(SM+ 1.7 overlay)", game->title_id);
+      snprintf(out, out_size, "%s", system_root);
+      return 0;
+    }
   }
   snprintf(err, err_size, "%s", "mounted game folder is unavailable");
   return -1;
