@@ -4197,7 +4197,16 @@ discover_games_ex(gc_game_t *games, size_t max_games, size_t *count_out,
   if(d) {
     while(count < max_games) {
       if(honor_cancel && job_cancelled()) break;
-      if(gc_any_operation_pending()) break;
+      /*
+       * Only short-circuit the live scan while an operation is running
+       * when the ShadowMountPlus API is available (sm 1.7 games-cache
+       * path).  In legacy mode (old SM, api unavailable) /api/gc/games
+       * calls discover_games() directly on every poll and must keep
+       * scanning the full list — exactly like gc_api_old.c — so the
+       * games keep their mount status / AMPR / size fields instead of
+       * falling back to the (AMPR-less) artifact cache mid-operation.
+       */
+      if(gc_shadowmount_api_available() && gc_any_operation_pending()) break;
       struct dirent *ent = readdir(d);
       if(!ent) break;
       if(!valid_title_id(ent->d_name)) continue;

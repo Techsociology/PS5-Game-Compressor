@@ -41,7 +41,7 @@ sm_log_snippet(const char* label, const char* path, const char* snippet,
     char buf[SM_LOG_SNIPPET_LEN + 1];
     size_t copy = total_len < SM_LOG_SNIPPET_LEN ? total_len : SM_LOG_SNIPPET_LEN;
     if (!snippet || total_len == 0) {
-        gc_log("shadowmount api %s: POST %s (empty)", label ? label : "log",
+        gc_trace("shadowmount api %s: POST %s (empty)", label ? label : "log",
                path ? path : "/");
         return;
     }
@@ -50,7 +50,7 @@ sm_log_snippet(const char* label, const char* path, const char* snippet,
     for (size_t i = 0; i < copy; i++) {
         if (buf[i] == '\r' || buf[i] == '\n') buf[i] = ' ';
     }
-    gc_log("shadowmount api %s: POST %s %s%s (%zu bytes)",
+    gc_trace("shadowmount api %s: POST %s %s%s (%zu bytes)",
            label ? label : "log", path ? path : "/", buf,
            copy < total_len ? "..." : "", total_len);
 }
@@ -485,7 +485,7 @@ sm_post(const char* path, const char* request_body,
                           path ? path : "/", SM_API_HOST, SM_API_PORT, body_len);
     if (header_len < 0 || (size_t)header_len + body_len >= sizeof(request)) {
         set_err(err, err_size, "ShadowMount API request too large");
-        gc_log("shadowmount api request too large: POST %s", path ? path : "/");
+        gc_trace("shadowmount api request too large: POST %s", path ? path : "/");
         goto done;
     }
     memcpy(request + header_len, body_ptr, body_len);
@@ -517,7 +517,7 @@ sm_post(const char* path, const char* request_body,
     if (strncmp(buf, "HTTP/1.1 ", 9) != 0 &&
         strncmp(buf, "HTTP/1.0 ", 9) != 0) {
         set_err(err, err_size, "ShadowMount API bad HTTP response");
-        gc_log("shadowmount api bad http response: POST %s", path ? path : "/");
+        gc_trace("shadowmount api bad http response: POST %s", path ? path : "/");
         goto done;
     }
     status = atoi(buf + 9);
@@ -525,7 +525,7 @@ sm_post(const char* path, const char* request_body,
     body_start = strstr(buf, "\r\n\r\n");
     if (!body_start) {
         set_err(err, err_size, "ShadowMount API response has no body");
-        gc_log("shadowmount api no body: POST %s http=%d", path ? path : "/",
+        gc_trace("shadowmount api no body: POST %s http=%d", path ? path : "/",
                status);
         goto done;
     }
@@ -650,7 +650,7 @@ sm_get_binary(const char* path_with_query,
     buf[used] = 0;
 
     if (used + 1 >= cap && cap >= SM_API_BINARY_MAX) {
-        gc_log("shadowmount api binary response truncated at %zu bytes: GET %s",
+        gc_trace("shadowmount api binary response truncated at %zu bytes: GET %s",
                used, path_with_query);
     }
 
@@ -696,7 +696,7 @@ sm_get_binary(const char* path_with_query,
             if (size_out) *size_out = 0;
         }
     }
-    gc_log("shadowmount api GET %s http=%d body=%zu",
+    gc_trace("shadowmount api GET %s http=%d body=%zu",
            path_with_query, status, body_len);
     rc = 0;
 
@@ -1030,7 +1030,7 @@ gc_shadowmount_api_mount_game_mode(const char* title_id, const char* mode,
         set_err(err, err_size, "ShadowMount API not available");
         return -1;
     }
-    gc_log("shadowmount api mount: request title=%s mode=%s",
+    gc_trace("shadowmount api mount: request title=%s mode=%s",
            title_id, mode && *mode ? mode : "(default)");
     if (sm_mount_once(title_id, mode, &resp, &http, err, err_size) != 0) {
         gc_log("shadowmount api mount: failed title=%s http=%d err=%s",
@@ -1045,7 +1045,7 @@ gc_shadowmount_api_mount_game_mode(const char* title_id, const char* mode,
         gc_log("shadowmount api mount: not mounted title=%s", title_id);
         return -1;
     }
-    gc_log("shadowmount api mount: ok title=%s", title_id);
+    gc_trace("shadowmount api mount: ok title=%s", title_id);
     return 0;
 }
 
@@ -1073,7 +1073,7 @@ gc_shadowmount_api_unmount_game(const char* title_id,
         set_err(err, err_size, "ShadowMount API not available");
         return -1;
     }
-    gc_log("shadowmount api unmount: request title=%s", title_id);
+    gc_trace("shadowmount api unmount: request title=%s", title_id);
     if (sm_unmount_once(title_id, &resp, &http, err, err_size) != 0) {
         gc_log("shadowmount api unmount: failed title=%s http=%d err=%s",
                title_id, http, (err && err[0]) ? err : "unknown");
@@ -1081,7 +1081,7 @@ gc_shadowmount_api_unmount_game(const char* title_id,
         return -1;
     }
     free(resp);
-    gc_log("shadowmount api unmount: ok title=%s", title_id);
+    gc_trace("shadowmount api unmount: ok title=%s", title_id);
     return 0;
 }
 
@@ -1355,7 +1355,7 @@ gc_shadowmount_api_add_manual_source(const char* path,
         return -1;
     }
     if (out && resp) sm_parse_manual_update(resp, out);
-    gc_log("shadowmount api manual add: ok path=%s changed=%d",
+    gc_trace("shadowmount api manual add: ok path=%s changed=%d",
            path, out ? out->changed : -1);
     free(resp);
     return 0;
@@ -1386,7 +1386,7 @@ gc_shadowmount_api_remove_manual_source(const char* path,
         return -1;
     }
     if (out && resp) sm_parse_manual_update(resp, out);
-    gc_log("shadowmount api manual remove: ok path=%s changed=%d",
+    gc_trace("shadowmount api manual remove: ok path=%s changed=%d",
            path, out ? out->changed : -1);
     free(resp);
     return 0;
@@ -1417,7 +1417,7 @@ gc_shadowmount_api_get_game_info(const char* title_id,
         return -1;
     }
     if (out && resp) sm_parse_game(resp, out);
-    gc_log("shadowmount api game info: ok title=%s", title_id);
+    gc_trace("shadowmount api game info: ok title=%s", title_id);
     free(resp);
     return 0;
 }
@@ -1453,7 +1453,7 @@ gc_shadowmount_api_get_game_icon(const char* title_id, int want_thumb,
                title_id, http, (err && err[0]) ? err : "unknown");
         return -1;
     }
-    gc_log("shadowmount api icon: ok title=%s thumb=%d size=%zu",
+    gc_trace("shadowmount api icon: ok title=%s thumb=%d size=%zu",
            title_id, want_thumb, size_out ? *size_out : 0);
     return 0;
 }
@@ -1557,7 +1557,7 @@ gc_shadowmount_api_update_settings(const gc_sm_settings_t* settings,
         free(resp);
         return -1;
     }
-    gc_log("shadowmount api settings update: ok");
+    gc_trace("shadowmount api settings update: ok");
     free(resp);
     return 0;
 }
@@ -1606,7 +1606,7 @@ gc_shadowmount_api_get_kernel_log(int max_bytes,
     snprintf(body_buf, sizeof(body_buf), "{\"max_bytes\":%d}", max_bytes);
     if (sm_post("/api/v1/kernel-log", body_buf, &resp, &http,
                 err, err_size) != 0) {
-        gc_log("shadowmount api kernel-log: failed http=%d err=%s",
+        gc_trace("shadowmount api kernel-log: failed http=%d err=%s",
                http, (err && err[0]) ? err : "unknown");
         free(resp);
         return -1;
@@ -1648,7 +1648,7 @@ gc_shadowmount_api_move_game_source(const char* title_id,
         return -1;
     }
     if (out && resp) sm_parse_storage_job(resp, out);
-    gc_log("shadowmount api move: accepted title=%s job_id=%lld",
+    gc_trace("shadowmount api move: accepted title=%s job_id=%lld",
            title_id, out ? out->job_id : -1);
     free(resp);
     return 0;
@@ -1686,7 +1686,7 @@ gc_shadowmount_api_copy_game_source(const char* title_id,
         return -1;
     }
     if (out && resp) sm_parse_storage_job(resp, out);
-    gc_log("shadowmount api copy: accepted title=%s job_id=%lld",
+    gc_trace("shadowmount api copy: accepted title=%s job_id=%lld",
            title_id, out ? out->job_id : -1);
     free(resp);
     return 0;
@@ -1727,7 +1727,7 @@ gc_shadowmount_api_unpack_game_image(const char* title_id,
         return -1;
     }
     if (out && resp) sm_parse_storage_job(resp, out);
-    gc_log("shadowmount api unpack: accepted title=%s job_id=%lld",
+    gc_trace("shadowmount api unpack: accepted title=%s job_id=%lld",
            title_id, out ? out->job_id : -1);
     free(resp);
     return 0;
@@ -1790,7 +1790,7 @@ gc_shadowmount_api_cancel_storage_job(long long job_id,
         return -1;
     }
     if (out && resp) sm_parse_storage_job(resp, out);
-    gc_log("shadowmount api storage cancel: ok job=%lld", job_id);
+    gc_trace("shadowmount api storage cancel: ok job=%lld", job_id);
     free(resp);
     return 0;
 }
@@ -1821,7 +1821,7 @@ gc_shadowmount_api_delete_game_source(const char* title_id,
         return -1;
     }
     if (out && resp) sm_parse_storage_job(resp, out);
-    gc_log("shadowmount api delete: accepted title=%s job_id=%lld",
+    gc_trace("shadowmount api delete: accepted title=%s job_id=%lld",
            title_id, out ? out->job_id : -1);
     free(resp);
     return 0;
@@ -1856,7 +1856,7 @@ gc_shadowmount_api_uninstall_game(const char* title_id,
         free(resp);
         return -1;
     }
-    gc_log("shadowmount api uninstall: ok title=%s", title_id);
+    gc_trace("shadowmount api uninstall: ok title=%s", title_id);
     free(resp);
     return 0;
 }
