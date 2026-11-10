@@ -1,3 +1,5 @@
+> I'm archiving this project & won't maintain it anymore. You can use [dumpforge](https://github.com/quer3q/ps5-dump-forge) to create ffpfs, exfat & other formats that GC doesn't support.👋👋
+
 <p align="center">
   <img src="./assets-app/icon0.png" width="128" />
 </p>
